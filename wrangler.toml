@@ -3,18 +3,26 @@ main = "src/index.js"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Public-facing settings. Override via dashboard or `wrangler.toml` locally.
 [vars]
 MAX_SIZE_MB   = "20"
-ALLOW_PUBLIC  = "false"   # if "true", anonymous uploads allowed
-ALLOWED_MIME  = "image/png,image/jpeg,image/webp,image/gif,image/avif,image/svg+xml,image/bmp,image/x-icon"
-PUBLIC_BASE   = ""         # e.g. "https://img.example.com"; falls back to request origin
+ALLOW_PUBLIC  = "true"
+ALLOWED_MIME  = "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
+PUBLIC_BASE   = ""
+ADMIN_PATH    = "r2id"
+# AI moderation toggled at runtime via /api/admin/settings; default off.
 
 [[r2_buckets]]
 binding     = "BUCKET"
 bucket_name = "imgbed"
 
-# Optional: pin the worker to a custom domain — uncomment after the zone is in your account.
+[[kv_namespaces]]
+binding = "META"
+id      = "042c0ed735b84a4b87dddb6958d74b64"
+
+[ai]
+binding = "AI"
+
+# Optional: pin to a custom domain.
 # [[routes]]
 # pattern = "img.example.com"
 # custom_domain = true

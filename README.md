@@ -1,133 +1,97 @@
 # imgbed
 
-> 跑在 Cloudflare Workers + R2 上的极简自托管图床。零依赖、单 Worker、内置仪表盘。
+A self-hosted image host on Cloudflare Workers + R2. Single Worker, KV-backed
+state, optional Workers AI moderation. No build step, no external services.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Minis233/imgbed)
+[![Live demo](https://img.shields.io/badge/demo-imgbed.minis233.workers.dev-a78bfa)](https://imgbed.minis233.workers.dev/)
+![License](https://img.shields.io/badge/license-MIT-22c55e)
 
-## 特性
+## Features
 
-- **一个 Worker 跑全部** — 静态 HTML 仪表盘 + 上传 / 列表 / 删除 API + 图片直链全在 `src/index.js`，没有数据库。
-- **R2 直存** — 图片存进 Cloudflare R2，按 `YYYYMMDD/<random>.<ext>` 分目录，10% 冷热成本，免下行流量费。
-- **拖拽 / 粘贴 / 多选上传** — 仪表盘支持拖拽、`Ctrl+V` 粘贴、多文件并发，自动复制 Markdown / HTML / BBCode。
-- **强缓存** — 直链命中 Cloudflare 边缘，`Cache-Control: public, max-age=31536000, immutable`，并支持 Range 请求。
-- **Token 鉴权** — `UPLOAD_TOKEN` 控制上传，`ADMIN_TOKEN` 控制图库管理；也可开匿名上传。
-- **MIME 白名单 + 大小限制** — 默认拒绝非图片，单文件 ≤ 20 MB（可改）。
-- **零依赖** — 纯 Web Crypto / Workers Runtime，没有任何 npm 运行时依赖。
+- **Drag / paste / multi-file upload** — public page with copy-to-clipboard URLs (raw / Markdown / HTML / BBCode).
+- **Modern glass UI** — mesh gradient background, dark-first with light-mode auto-switch.
+- **Burn after read** — 10s ~ 600s window starting at the first viewer's hit.
+- **TTL expiry** — 1 hour, 1/7/30 day.
+- **Workers AI moderation** — optional, runs async (~minute) after upload via `@cf/llava-hf/llava-1.5-7b-hf`. Violations auto-delete the object and (optionally) ban the uploader IP.
+- **Admin dashboard** — at `/<ADMIN_PATH>/<ADMIN_TOKEN>` (URL-secret). Lists every object with uploader IP, manual recheck, manual ban/unban, settings toggle.
+- **R2 + KV only** — no D1, no DO. Runs on Cloudflare's free tier.
 
-## 路由
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/` | 仪表盘（HTML） |
-| GET | `/i/<key>` | 图片直链（公开） |
-| POST | `/api/upload` | 上传图片（multipart `file` 或裸 body） |
-| GET | `/api/list?cursor=&prefix=&limit=` | 列表（admin） |
-| DELETE | `/api/object/<key>` | 删除（admin） |
-| GET | `/healthz` | 健康检查 |
-
-## 部署
-
-需要 Node 18+ 和已开通 R2 的 Cloudflare 账号。
+## Deploy
 
 ```bash
-git clone https://github.com/Minis233/imgbed.git
+git clone https://github.com/Minis233/imgbed
 cd imgbed
 npm install
-npx wrangler login           # 第一次部署需要
 
-# 创建 R2 bucket（名字与 wrangler.toml 一致）
+# Resources
 npx wrangler r2 bucket create imgbed
+npx wrangler kv namespace create META
+# Paste the returned id into wrangler.toml under [[kv_namespaces]].
 
-# 设置 Token（管理员密码，自己选一个长一点的）
-npx wrangler secret put UPLOAD_TOKEN
-# 可选：单独的图库管理 token；不设则与 UPLOAD_TOKEN 相同
-npx wrangler secret put ADMIN_TOKEN
+# Secrets
+npx wrangler secret put ADMIN_TOKEN   # backend access token (long random string)
+npx wrangler secret put UPLOAD_TOKEN  # only required when ALLOW_PUBLIC="false"
 
-# 部署
 npx wrangler deploy
 ```
 
-部署完成后会拿到 `https://imgbed.<your-subdomain>.workers.dev`，打开 → 设置页粘贴 token → 上传。
+After deploy, browse:
 
-### 自定义域名
+- `https://<your-worker>.workers.dev/` — upload page
+- `https://<your-worker>.workers.dev/<ADMIN_PATH>/<ADMIN_TOKEN>/` — admin dashboard
 
-在 Cloudflare 同账号下解析任意域，把 `wrangler.toml` 里的 `[[routes]]` 段取消注释、改成你的域名，再 `wrangler deploy`，自动建 DNS + 签 SSL。
+Custom domain: uncomment `[[routes]]` in `wrangler.toml` once your zone is on the same Cloudflare account, then redeploy.
 
-```toml
-[[routes]]
-pattern = "img.example.com"
-custom_domain = true
-```
+## Configuration
 
-## 配置
+Edit `wrangler.toml` `[vars]` (re-deploy applies changes):
 
-`wrangler.toml` 里 `[vars]` 节：
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `MAX_SIZE_MB` | `20` | Per-file size cap |
+| `ALLOW_PUBLIC` | `true` | If `false`, uploads need `Authorization: Bearer $UPLOAD_TOKEN` |
+| `ALLOWED_MIME` | `image/png,image/jpeg,image/webp,...` | Comma-separated MIME allow-list |
+| `PUBLIC_BASE` | (empty) | Override URL base for `markdown`/`html` outputs |
+| `ADMIN_PATH` | `r2id` | First segment of the admin URL |
 
-| 变量 | 默认 | 说明 |
-|------|------|------|
-| `MAX_SIZE_MB` | `20` | 单文件最大 MB |
-| `ALLOW_PUBLIC` | `false` | `true` 时允许匿名上传 |
-| `ALLOWED_MIME` | `image/png,...` | 上传 MIME 白名单（逗号分隔） |
-| `PUBLIC_BASE` | 空 | 强制使用某个 base URL（CDN 直连场景） |
+AI moderation is toggled at runtime from the admin dashboard (Settings tab).
 
-Secrets：
+## Endpoints
 
-| 名字 | 必填 | 说明 |
-|------|------|------|
-| `UPLOAD_TOKEN` | `ALLOW_PUBLIC=false` 时必填 | 上传鉴权 |
-| `ADMIN_TOKEN` | 选填 | 图库管理；不设则 = `UPLOAD_TOKEN` |
+### Public
 
-## 命令行用法
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET`  | `/` | Upload page |
+| `POST` | `/api/upload` | multipart/form-data; fields: `file`, optional `burn` (sec), `expiry` (sec) |
+| `GET`/`HEAD` | `/i/<key>` | Serve image (Range, ETag/304, lazy-delete on burn/expiry) |
+| `GET`  | `/api/status/<key>` | JSON status: moderation state + remaining burn seconds |
+| `GET`  | `/healthz` | `ok` |
 
-```bash
-# 上传
-curl -H "Authorization: Bearer $TOKEN" \
-     -F "file=@photo.png" \
-     https://imgbed.example.workers.dev/api/upload
-
-# 裸 body 上传（也支持）
-curl -H "Authorization: Bearer $TOKEN" \
-     -H "Content-Type: image/png" \
-     -H "X-Filename: photo.png" \
-     --data-binary @photo.png \
-     https://imgbed.example.workers.dev/api/upload
-
-# 列表
-curl -H "Authorization: Bearer $TOKEN" \
-     https://imgbed.example.workers.dev/api/list
-
-# 删除
-curl -X DELETE -H "Authorization: Bearer $TOKEN" \
-     https://imgbed.example.workers.dev/api/object/20260519/abcdef.png
-```
-
-返回示例：
-
-```json
-{
-  "ok": true,
-  "key": "20260519/3a7f0c1d8e9f2a5b.png",
-  "url": "https://img.example.com/i/20260519/3a7f0c1d8e9f2a5b.png",
-  "markdown": "![](https://img.example.com/i/20260519/3a7f0c1d8e9f2a5b.png)",
-  "html": "<img src=\"https://img.example.com/i/20260519/3a7f0c1d8e9f2a5b.png\" alt=\"\" />",
-  "bbcode": "[img]https://img.example.com/i/20260519/3a7f0c1d8e9f2a5b.png[/img]",
-  "size": 12345,
-  "contentType": "image/png",
-  "sha256": "..."
-}
-```
-
-## 开发
+Curl example:
 
 ```bash
-npm run dev    # wrangler dev (本地 http://127.0.0.1:8787)
-npm run deploy # wrangler deploy
+curl -F "file=@cat.jpg" -F "burn=60" https://<your>/api/upload
 ```
 
-## 成本
+### Admin (`/<ADMIN_PATH>/<ADMIN_TOKEN>` prefix)
 
-Workers free tier：100k requests/day。R2 free tier：10GB 存储 + 1M Class A + 10M Class B 每月。**R2 出站到公网零费用**，是当下最划算的图床后端。
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET`    | `/api/list?cursor=&limit=` | Object list with IP, UA, moderation, burn/expiry |
+| `DELETE` | `/api/object/<key>` | Force delete |
+| `GET`/`POST`/`DELETE` | `/api/bans[...]` | List / add / remove IP ban |
+| `GET`/`POST` | `/api/settings` | Toggle AI moderation, auto-ban-on-violation |
+| `POST`   | `/api/recheck` | `{ "key": "..." }` — re-run moderation immediately |
+
+## Design notes
+
+- **Storage layout** — R2 keys are `YYYYMMDD/<8-byte-hex>.<ext>`. `customMetadata` stores `sha256`, `originalName`, `uploadedAt`, `ip`, `userAgent`, `burnSeconds`, `expiresAt`.
+- **State (KV)** — `settings`, `ban:<ip>`, `burn:<key>` (first-view timestamp), `mod:<key>` (moderation result).
+- **Burn semantics** — KV record is created on the *first* successful GET. Subsequent viewers see remaining time in `X-Burn-Seconds-Remaining`. After the window elapses, the next request 410s and lazy-deletes both the R2 object and the KV record.
+- **Moderation** — runs in `ctx.waitUntil(...)` so the upload responds immediately. The image is publicly viewable while pending. If Llava's first whitespace-trimmed token is `VIOLATION`, the worker deletes the R2 object and (if enabled) bans the uploader IP. Errors return `status: "error"` and leave the image alone.
+- **Admin auth** — secret is in the URL path, not headers, so the dashboard is shareable as a single link. Pages get `X-Robots-Tag: noindex,nofollow` and `Cache-Control: no-store`.
 
 ## License
 
-MIT — 见 [LICENSE](LICENSE)。
+MIT. See [LICENSE](LICENSE).
