@@ -415,11 +415,17 @@ function galleryItem(o) {
   el.className = "item";
   const badges = [];
   const mod = o.moderation;
+  const modTitle = mod ? [
+    mod.verdict ? "Verdict: " + mod.verdict : "",
+    mod.reasons?.length ? "Reasons: " + mod.reasons.join(", ") : "",
+    mod.description ? "Description: " + mod.description : "",
+    mod.error ? "Error: " + mod.error : "",
+  ].filter(Boolean).join("\n\n") : "";
   if (mod) {
     if (mod.status === "pending") badges.push('<span class="badge pending">⏳ 审查中</span>');
-    if (mod.status === "safe") badges.push('<span class="badge safe">✓ 通过</span>');
-    if (mod.status === "violation") badges.push('<span class="badge violation">⛔ 违规</span>');
-    if (mod.status === "error") badges.push('<span class="badge error">⚠ 错误</span>');
+    if (mod.status === "safe") badges.push(\`<span class="badge safe" title="\${escapeHtml(modTitle)}">✓ 通过</span>\`);
+    if (mod.status === "violation") badges.push(\`<span class="badge violation" title="\${escapeHtml(modTitle)}">⛔ 违规</span>\`);
+    if (mod.status === "error") badges.push(\`<span class="badge error" title="\${escapeHtml(modTitle)}">⚠ 错误</span>\`);
   }
   if (o.burnSeconds) badges.push(\`<span class="badge burn">🔥 \${o.burnSeconds}s</span>\`);
   if (o.expiresAt) badges.push(\`<span class="badge expiry">⏰ \${fmtDate(o.expiresAt)}</span>\`);

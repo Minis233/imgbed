@@ -1,9 +1,8 @@
 # imgbed
 
-A self-hosted image host on Cloudflare Workers + R2. Single Worker, KV-backed
-state, optional Workers AI moderation. No build step, no external services.
+A self-hosted image host on **Cloudflare Workers + R2 + KV**, with optional Workers AI
+moderation. Single Worker, no build step, no external services.
 
-[![Live demo](https://img.shields.io/badge/demo-imgbed.minis233.workers.dev-a78bfa)](https://imgbed.minis233.workers.dev/)
 ![License](https://img.shields.io/badge/license-MIT-22c55e)
 
 ## Features
