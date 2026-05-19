@@ -23,6 +23,7 @@ moderation. Single Worker, no build step, no external services.
 ```bash
 git clone https://github.com/Minis233/imgbed
 cd imgbed
+cp wrangler.example.toml wrangler.toml
 npm install
 ```
 
@@ -40,18 +41,18 @@ Wrangler prints something like:
 ✨ Success!
 [[kv_namespaces]]
 binding = "META"
-id      = "042c0ed735b84a4b87dddb6958d74b64"
+id      = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
 Copy that `id` and paste it into **two** places in `wrangler.toml`:
 
 ```toml
 [vars]
-META_KV_ID = "042c0ed735b84a4b87dddb6958d74b64"   # ← paste here
+META_KV_ID = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"   # ← paste here
 
 [[kv_namespaces]]
 binding = "META"
-id      = "042c0ed735b84a4b87dddb6958d74b64"      # ← and here
+id      = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"      # ← and here
 ```
 
 (They have to match — the second is the actual binding, the first is what the

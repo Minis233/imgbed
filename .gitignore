@@ -5,3 +5,6 @@ node_modules/
 *.log
 .DS_Store
 dist/
+# Real wrangler.toml contains the user's KV namespace id and other account-specific
+# values. The repo ships wrangler.example.toml; copy it on first checkout.
+wrangler.toml

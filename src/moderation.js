@@ -137,6 +137,8 @@ export async function moderateImage(env, key, imageBytes, uploaderIp) {
   await putModeration(env, key, info);
 
   if (status === "violation") {
+    // Only the current violating object is deleted. Existing safe uploads from
+    // the same IP are left intact; banning is forward-only (blocks new uploads).
     try { await env.BUCKET.delete(key); } catch {}
     if (settings.banAutoOnViolation && uploaderIp) {
       await banIp(env, uploaderIp, { reason: "ai-moderation: " + reason.join(", "), key });
