@@ -4,12 +4,12 @@ compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
-MAX_SIZE_MB   = "20"
-ALLOW_PUBLIC  = "true"
-ALLOWED_MIME  = "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
-PUBLIC_BASE   = ""
-ADMIN_PATH    = "r2id"
-# AI moderation toggled at runtime via /api/admin/settings; default off.
+MAX_SIZE_MB    = "20"
+ALLOW_PUBLIC   = "true"
+ALLOWED_MIME   = "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
+PUBLIC_BASE    = ""
+# Admin path = /<R2_BUCKET_NAME>/<ADMIN_TOKEN>/ — keep this in sync with [[r2_buckets]].bucket_name below.
+R2_BUCKET_NAME = "imgbed"
 
 [[r2_buckets]]
 binding     = "BUCKET"

@@ -65,10 +65,13 @@ function getClientIp(req) {
 }
 
 function isAdminPath(env, pathname) {
-  const adminPath = (env.ADMIN_PATH || "").replace(/^\/+|\/+$/g, "");
+  // Admin URL = /<R2_BUCKET_NAME>/<ADMIN_TOKEN>/...
+  // Bucket name is configured in wrangler.toml; mirror it via the R2_BUCKET_NAME var
+  // so the worker can read it at runtime (R2 bindings don't expose .name).
+  const bucketName = (env.R2_BUCKET_NAME || env.ADMIN_PATH || "").replace(/^\/+|\/+$/g, "");
   const adminToken = env.ADMIN_TOKEN || "";
-  if (!adminPath || !adminToken) return null;
-  const prefix = `/${adminPath}/${adminToken}`;
+  if (!bucketName || !adminToken) return null;
+  const prefix = `/${bucketName}/${adminToken}`;
   if (pathname === prefix || pathname === prefix + "/" || pathname.startsWith(prefix + "/")) {
     return { prefix, sub: pathname.slice(prefix.length) || "/" };
   }

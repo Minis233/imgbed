@@ -11,9 +11,9 @@ state, optional Workers AI moderation. No build step, no external services.
 - **Drag / paste / multi-file upload** — public page with copy-to-clipboard URLs (raw / Markdown / HTML / BBCode).
 - **Modern glass UI** — mesh gradient background, dark-first with light-mode auto-switch.
 - **Burn after read** — 10s ~ 600s window starting at the first viewer's hit.
-- **TTL expiry** — 1 hour, 1/7/30 day.
+- **TTL expiry** — optional. Default is **permanent**; choose 1h / 1d / 7d / 30d / 90d / 1y when needed.
 - **Workers AI moderation** — optional, runs async (~minute) after upload via `@cf/llava-hf/llava-1.5-7b-hf`. Violations auto-delete the object and (optionally) ban the uploader IP.
-- **Admin dashboard** — at `/<ADMIN_PATH>/<ADMIN_TOKEN>` (URL-secret). Lists every object with uploader IP, manual recheck, manual ban/unban, settings toggle.
+- **Admin dashboard** — at `/<R2_BUCKET_NAME>/<ADMIN_TOKEN>` (URL-secret using your bucket name as the path prefix). Lists every object with uploader IP, manual recheck, manual ban/unban, settings toggle.
 - **R2 + KV only** — no D1, no DO. Runs on Cloudflare's free tier.
 
 ## Deploy
@@ -38,7 +38,7 @@ npx wrangler deploy
 After deploy, browse:
 
 - `https://<your-worker>.workers.dev/` — upload page
-- `https://<your-worker>.workers.dev/<ADMIN_PATH>/<ADMIN_TOKEN>/` — admin dashboard
+- `https://<your-worker>.workers.dev/<bucket-name>/<ADMIN_TOKEN>/` — admin dashboard (e.g. `/imgbed/<token>/` for the default `bucket_name = "imgbed"`)
 
 Custom domain: uncomment `[[routes]]` in `wrangler.toml` once your zone is on the same Cloudflare account, then redeploy.
 
@@ -52,7 +52,7 @@ Edit `wrangler.toml` `[vars]` (re-deploy applies changes):
 | `ALLOW_PUBLIC` | `true` | If `false`, uploads need `Authorization: Bearer $UPLOAD_TOKEN` |
 | `ALLOWED_MIME` | `image/png,image/jpeg,image/webp,...` | Comma-separated MIME allow-list |
 | `PUBLIC_BASE` | (empty) | Override URL base for `markdown`/`html` outputs |
-| `ADMIN_PATH` | `r2id` | First segment of the admin URL |
+| `R2_BUCKET_NAME` | `imgbed` | First segment of the admin URL — keep matched to `[[r2_buckets]].bucket_name` |
 
 AI moderation is toggled at runtime from the admin dashboard (Settings tab).
 
@@ -74,7 +74,7 @@ Curl example:
 curl -F "file=@cat.jpg" -F "burn=60" https://<your>/api/upload
 ```
 
-### Admin (`/<ADMIN_PATH>/<ADMIN_TOKEN>` prefix)
+### Admin (`/<R2_BUCKET_NAME>/<ADMIN_TOKEN>` prefix)
 
 | Method | Path | Purpose |
 | --- | --- | --- |

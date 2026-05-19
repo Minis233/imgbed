@@ -189,13 +189,15 @@ ${BASE_CSS}
         <input type="checkbox" id="exp-on" />
       </header>
       <div class="body">
-        到时不再可访问，懒删除
+        到时不再可访问，懒删除（默认永久保留）
         <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
           <select id="exp-sec" disabled style="flex:1;padding:6px;border-radius:8px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);font:inherit">
             <option value="3600">1 小时</option>
-            <option value="86400" selected>1 天</option>
+            <option value="86400">1 天</option>
             <option value="604800">7 天</option>
-            <option value="2592000">30 天</option>
+            <option value="2592000" selected>30 天</option>
+            <option value="7776000">90 天</option>
+            <option value="31536000">1 年</option>
           </select>
         </div>
       </div>
