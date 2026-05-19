@@ -8,8 +8,8 @@ MAX_SIZE_MB    = "20"
 ALLOW_PUBLIC   = "true"
 ALLOWED_MIME   = "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
 PUBLIC_BASE    = ""
-# Admin path = /<R2_BUCKET_NAME>/<ADMIN_TOKEN>/ — keep this in sync with [[r2_buckets]].bucket_name below.
-R2_BUCKET_NAME = "imgbed"
+# Admin path = /<META_KV_ID>/<ADMIN_TOKEN>/ — keep this in sync with [[kv_namespaces]].id below.
+META_KV_ID     = "042c0ed735b84a4b87dddb6958d74b64"
 
 [[r2_buckets]]
 binding     = "BUCKET"

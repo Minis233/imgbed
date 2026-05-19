@@ -8,15 +8,15 @@
 //   GET    /api/status/<key>     -> public moderation status (so uploader UI can poll)
 //   GET    /healthz              -> ok
 //
-// Admin (gated by /<ADMIN_PATH>/<ADMIN_TOKEN> URL prefix; see isAdminPath):
-//   GET    /<P>/<T>/             -> admin dashboard HTML
-//   GET    /<P>/<T>/api/list     -> JSON list of objects + status + uploader ip
-//   DELETE /<P>/<T>/api/object/<key>
-//   GET    /<P>/<T>/api/bans
-//   POST   /<P>/<T>/api/bans     -> { ip, reason? }
-//   DELETE /<P>/<T>/api/bans/<ip>
-//   GET    /<P>/<T>/api/settings
-//   POST   /<P>/<T>/api/settings -> { aiModeration?, banAutoOnViolation? }
+// Admin (gated by /<META_KV_ID>/<ADMIN_TOKEN> URL prefix; see isAdminPath):
+//   GET    /<KV>/<T>/             -> admin dashboard HTML
+//   GET    /<KV>/<T>/api/list     -> JSON list of objects + status + uploader ip
+//   DELETE /<KV>/<T>/api/object/<key>
+//   GET    /<KV>/<T>/api/bans
+//   POST   /<KV>/<T>/api/bans     -> { ip, reason? }
+//   DELETE /<KV>/<T>/api/bans/<ip>
+//   GET    /<KV>/<T>/api/settings
+//   POST   /<KV>/<T>/api/settings -> { aiModeration?, banAutoOnViolation? }
 
 import { renderUploadPage } from "./ui.js";
 import { renderAdminPage } from "./admin-ui.js";
@@ -30,6 +30,30 @@ import { moderateImage } from "./moderation.js";
 
 const TEXT = { "content-type": "text/plain; charset=utf-8" };
 const JSON_H = { "content-type": "application/json; charset=utf-8" };
+
+// 1x1 transparent PNG, served to preview crawlers so burn timers don't trip
+// when a link is auto-unfurled by Telegram / Discord / WhatsApp / etc.
+const PLACEHOLDER_PNG = Uint8Array.from([
+  0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,
+  0x00,0x00,0x00,0x0d,0x49,0x48,0x44,0x52,0x00,0x00,0x00,0x01,
+  0x00,0x00,0x00,0x01,0x08,0x06,0x00,0x00,0x00,0x1f,0x15,0xc4,
+  0x89,0x00,0x00,0x00,0x0d,0x49,0x44,0x41,0x54,0x78,0x9c,0x63,
+  0x00,0x01,0x00,0x00,0x05,0x00,0x01,0x0d,0x0a,0x2d,0xb4,0x00,
+  0x00,0x00,0x00,0x49,0x45,0x4e,0x44,0xae,0x42,0x60,0x82,
+]);
+
+// Match common link-preview / unfurl crawlers and prefetchers. Real browsers
+// don't include any of these tokens in their UA.
+const BOT_RE = /(bot|crawl|spider|fetch(er)?|preview|unfurl|scrape|monitor|check|index|archive|googlebot|bingbot|baiduspider|yandex|sogou|duckduckbot|telegrambot|whatsapp|skypeuripreview|facebookexternalhit|twitterbot|discordbot|slackbot|linkedinbot|embedly|iframely|outlookhostmail|microsoftpreview|applebot|pinterest|redditbot|qq\/?|qqbrowserbot|tencentbot|miuibrowser|wechat|weixin|line\/|node-?fetch|python-?requests|httpie|axios|go-http-client|okhttp|java\/)/i;
+
+function looksLikePreviewBot(req) {
+  const ua = (req.headers.get("user-agent") || "").toLowerCase();
+  // RFC 9110 / Chrome speculative loads — any of these mean "not a real eyeball view".
+  const purpose = (req.headers.get("sec-purpose") || req.headers.get("purpose") || "").toLowerCase();
+  if (purpose.includes("prefetch") || purpose.includes("prerender")) return true;
+  if (!ua) return true; // empty UA — probably a script
+  return BOT_RE.test(ua);
+}
 
 const EXT_BY_MIME = {
   "image/png": "png",
@@ -65,13 +89,13 @@ function getClientIp(req) {
 }
 
 function isAdminPath(env, pathname) {
-  // Admin URL = /<R2_BUCKET_NAME>/<ADMIN_TOKEN>/...
-  // Bucket name is configured in wrangler.toml; mirror it via the R2_BUCKET_NAME var
-  // so the worker can read it at runtime (R2 bindings don't expose .name).
-  const bucketName = (env.R2_BUCKET_NAME || env.ADMIN_PATH || "").replace(/^\/+|\/+$/g, "");
+  // Admin URL = /<META_KV_ID>/<ADMIN_TOKEN>/...
+  // The KV namespace id is in wrangler.toml [[kv_namespaces]].id; mirror it via the
+  // META_KV_ID var so the worker can read it (KV bindings don't expose .id).
+  const kvId = (env.META_KV_ID || "").replace(/^\/+|\/+$/g, "");
   const adminToken = env.ADMIN_TOKEN || "";
-  if (!bucketName || !adminToken) return null;
-  const prefix = `/${bucketName}/${adminToken}`;
+  if (!kvId || !adminToken) return null;
+  const prefix = `/${kvId}/${adminToken}`;
   if (pathname === prefix || pathname === prefix + "/" || pathname.startsWith(prefix + "/")) {
     return { prefix, sub: pathname.slice(prefix.length) || "/" };
   }
@@ -211,6 +235,7 @@ async function handleServe(req, env, ctx, rawKey) {
   const key = safeKey(rawKey);
   if (!key) return err(400, "bad key");
   const isHead = req.method === "HEAD";
+  const isBot = looksLikePreviewBot(req);
 
   // Cheap head first to read metadata.
   const head = await env.BUCKET.head(key);
@@ -226,11 +251,26 @@ async function handleServe(req, env, ctx, rawKey) {
     return new Response("expired", { status: 410, headers: TEXT });
   }
 
+  // Anti-preview: for burn images, refuse to serve real bytes to crawlers
+  // and don't start the timer. Send a tiny placeholder PNG so the unfurl
+  // doesn't error out, but with no-preview hints.
+  if (burnSec > 0 && isBot && !isHead) {
+    const headers = new Headers({
+      "content-type": "image/png",
+      "cache-control": "private, no-store, no-cache, must-revalidate",
+      "x-robots-tag": "noindex, nofollow, noarchive, noimageindex, nosnippet",
+      "referrer-policy": "no-referrer",
+      "x-imgbed-burn": "preview-blocked",
+      "content-length": String(PLACEHOLDER_PNG.byteLength),
+    });
+    return new Response(PLACEHOLDER_PNG, { status: 200, headers });
+  }
+
   // Burn-after-read window — start the timer on first non-HEAD viewer.
   let burnState = null;
   if (burnSec > 0) {
     burnState = await getBurnState(env, key);
-    if (!isHead && !burnState) {
+    if (!isHead && !isBot && !burnState) {
       burnState = await startBurn(env, key, burnSec);
     }
     if (burnState) {
@@ -280,6 +320,8 @@ async function handleServe(req, env, ctx, rawKey) {
   headers.set("content-length", String(obj.range ? obj.range.length : obj.size));
   if (burnSec) {
     headers.set("cache-control", "private, no-store, no-cache, must-revalidate");
+    headers.set("x-robots-tag", "noindex, nofollow, noarchive, noimageindex, nosnippet");
+    headers.set("referrer-policy", "no-referrer");
     if (burnState) {
       const remaining = Math.max(0, burnState.durationSec - Math.floor((Date.now() - burnState.firstSeenAt) / 1000));
       headers.set("x-burn-seconds-remaining", String(remaining));
@@ -425,6 +467,25 @@ export default {
     const url = new URL(req.url);
     const { pathname } = url;
 
+    // Force HTTPS — Cloudflare puts the original scheme in cf-visitor; if a
+    // client (or share-sheet) hits http://, send them to https:// before
+    // anything else runs.
+    let scheme = url.protocol.replace(":", "");
+    const cfVisitor = req.headers.get("cf-visitor");
+    if (cfVisitor) {
+      const m = cfVisitor.match(/"scheme":"(https?)"/i);
+      if (m) scheme = m[1].toLowerCase();
+    } else if (req.headers.get("x-forwarded-proto")) {
+      scheme = req.headers.get("x-forwarded-proto").toLowerCase();
+    }
+    if (scheme !== "https") {
+      const target = "https://" + url.host + url.pathname + url.search;
+      return new Response(null, {
+        status: 308,
+        headers: { location: target, "strict-transport-security": "max-age=63072000; includeSubDomains; preload" },
+      });
+    }
+
     if (req.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
@@ -449,7 +510,10 @@ export default {
     if ((req.method === "GET" || req.method === "HEAD") && (pathname === "/" || pathname === "/index.html")) {
       const html = renderUploadPage(env);
       return new Response(req.method === "HEAD" ? null : html, {
-        headers: { "content-type": "text/html; charset=utf-8" },
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+        },
       });
     }
 
