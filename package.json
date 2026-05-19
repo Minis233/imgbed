@@ -1,0 +1,21 @@
+{
+  "name": "imgbed",
+  "version": "1.0.0",
+  "description": "Self-hosted image host on Cloudflare Workers + R2.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Minis233/imgbed",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Minis233/imgbed.git"
+  },
+  "devDependencies": {
+    "wrangler": "^4.93.0"
+  }
+}
